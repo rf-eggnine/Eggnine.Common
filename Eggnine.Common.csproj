@@ -1,8 +1,22 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Authors>RF@Eggnine.com</Authors>
+    <Company>Eggnine</Company>
+    <Copyright>Copyright © 2025 RF@Eggnine.com</Copyright>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageProjectUrl>https://github.com/rf-eggnine/Eggnine.Common</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/rf-eggnine/Eggnine.Common</RepositoryUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <None Include="LICENSE" Pack="true" PackagePath="" />
+    <None Include="README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
+  
 </Project>

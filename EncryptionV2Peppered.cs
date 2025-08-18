@@ -7,7 +7,7 @@ using System.Security.Cryptography;
 
 namespace Eggnine.Common;
 
-internal sealed class Encryption2Peppered : IEncryptionV2
+internal sealed class EncryptionV2Peppered : IEncryptionV2
 {
     private const string Alg = "pbkdf2-sha256";
     // Header: $pbkdf2-sha256$v=2$p=1;k=<keyId>$i=<iters>$s=<b64salt>$h=<b64hash>
@@ -15,7 +15,7 @@ internal sealed class Encryption2Peppered : IEncryptionV2
     private readonly IPepperKeyRing _ring;
     private readonly int _iterations, _saltLen, _hashLen;
 
-    public Encryption2Peppered(IPepperKeyRing ring, int iterations = 200_000, int saltLen = 16, int hashLen = 32)
+    public EncryptionV2Peppered(IPepperKeyRing ring, int iterations = 200_000, int saltLen = 16, int hashLen = 32)
     { _ring = ring; _iterations = iterations; _saltLen = saltLen; _hashLen = hashLen; }
 
     public void Dispose()

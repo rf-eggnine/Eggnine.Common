@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 namespace Eggnine.Common;
 
-internal sealed class MultiEncryption : IEncryptionV2, IDisposable
+internal sealed class MultiEncryption : IMultiEncyrption, IDisposable
 {
     private readonly IReadOnlyList<IEncryptionV2> _algorithms;
     private readonly IEncryptionV2 _preferred; // used for Encrypt()

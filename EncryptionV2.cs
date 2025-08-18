@@ -1,6 +1,6 @@
-// © 2025 Eggnine Syndicate Ltd.
-// Versioned PBKDF2-SHA256 hasher suitable for passwords and normalized recovery identifiers.
-// Format: $pbkdf2-sha256$v=1$i=<iters>$s=<base64salt>$h=<base64hash>
+// ©️ 2025 RF@Eggnine.com
+// Licensed under the EG9-PD License which includes a personal IP disclaimer.
+// See LICENSE file in the project root for full license information.
 
 using System;
 using System.Security.Cryptography;

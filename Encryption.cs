@@ -40,7 +40,7 @@ internal class Encryption : IEncryption, IDisposable
         byte[] salt = new byte[_saltLength];
         _saltProvider.GetBytes(salt, 0, _saltLength);
         string toReturn = CombineHashAndSalt(Hash(toEncrypt, salt, _iterations), salt);
-        Clear(salt);
+        CryptographicOperations.ZeroMemory(salt);
         return toReturn;
     }
 
@@ -51,7 +51,7 @@ internal class Encryption : IEncryption, IDisposable
         bool verifies = StringComparer.Ordinal.Compare(
             CombineHashAndSalt(Hash(toVerify, salt, _iterations), salt), 
             verifyAgainst) == 0;
-        Clear(salt);
+        CryptographicOperations.ZeroMemory(salt);
         return verifies;
     }
 
@@ -93,7 +93,7 @@ internal class Encryption : IEncryption, IDisposable
         {
             toReturn[i] = (byte)(toSalt[i] ^ salt[i % _saltLength]);
         }
-        Clear(toSalt);
+        CryptographicOperations.ZeroMemory(toSalt);
         return toReturn;
     }
 
@@ -113,7 +113,7 @@ internal class Encryption : IEncryption, IDisposable
             throw new InvalidHashAndSaltStringException();
         }
         Array.Copy(hashAndSalt, _saltLength, hash, 0, hashAndSalt.Length - _saltLength);
-        Clear(hashAndSalt);
+        CryptographicOperations.ZeroMemory(hashAndSalt);
         return hash;
     }
 
@@ -123,17 +123,12 @@ internal class Encryption : IEncryption, IDisposable
         byte[] hashAndSalt = new byte[_saltLength + hash.Length];
         Array.Copy(salt, 0, hashAndSalt, 0, _saltLength);
         Array.Copy(hash, 0, hashAndSalt, _saltLength, hash.Length);
-        Clear(hash);
+        CryptographicOperations.ZeroMemory(hash);
         string toReturn = Convert.ToBase64String(hashAndSalt);
-        Clear(hashAndSalt);
+        CryptographicOperations.ZeroMemory(hashAndSalt);
         return toReturn;
     }
     
-    private void Clear(byte[] toClear)
-    {
-        _saltProvider.GetBytes(toClear, 0, toClear.Length);
-    }
-
     private void CheckForDisposed()
     {
         if (_disposed)

@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Authors>RF@Eggnine.com</Authors>
-    <Company>Eggnine</Company>
+    <Company>Eggnine Syndicate Ltd</Company>
     <Copyright>Copyright © 2025 RF@Eggnine.com</Copyright>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageProjectUrl>https://github.com/rf-eggnine/Eggnine.Common</PackageProjectUrl>
@@ -12,6 +12,7 @@
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
   </PropertyGroup>
 
   <ItemGroup>

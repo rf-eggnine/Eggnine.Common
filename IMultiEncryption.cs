@@ -16,12 +16,14 @@ public interface IMultiEncyrption : IEncryptionV2
     /// </summary>
     /// <param name="input"></param>
     /// <param name="stored"></param>
-    /// <param name="persistNewHashAsync"></param>
-    /// <returns>true iff input verifies against stored</returns>
-    public Task<bool> VerifyAndUpgradeAsync(
+    /// <returns>
+    ///     (false, false) if the input did not verify against the stored
+    ///     (true, false) if the input verified against the stored and the alg was the latest
+    ///     (true, true) if the input verified against the stored and the stored requires an upgrade
+    /// </returns>
+    public Task<(bool Verified, bool Upgraded)> VerifyAndCheckUpgradeAsync(
         string input,
-        string? stored,
-        Func<string, Task> persistNewHashAsync);
+        string? stored);
 
     /// <summary>
     /// Similar to VerifyAndUpgradeAsync but returns both the verify result
@@ -35,7 +37,7 @@ public interface IMultiEncyrption : IEncryptionV2
     ///     (true, false) if the input verified against the stored and the alg was the latest
     ///     (true, true) if the input verified against the stored and the stored was upgraded
     /// </returns>
-    public Task<(bool Verified, bool Upgraded)> TryVerifyAndUpgradeAsync(
+    public Task<(bool Verified, bool Upgraded)> VerifyAndUpgradeAsync(
         string input,
         string? stored,
         Func<string, Task> persistNewHashAsync);

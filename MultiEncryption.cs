@@ -85,25 +85,14 @@ internal sealed class MultiEncryption : IMultiEncyrption, IDisposable
         return _algorithms.Any(a => a.IsTargetFormat(input));
     }
 
-
-    /// <summary>
-    /// Verify input against 'stored' using a flexible verifier (e.g., CompatEncryption).
-    /// If verified and 'stored' is NOT in the target algorithm format, re-hash with 'target'
-    /// and persist via callback. Returns true IFF verification succeeds.
-    /// </summary>
-    public async Task<bool> VerifyAndUpgradeAsync(
-        string input,                           // plaintext input (password or normalized recovery identifier)
-        string? stored,                         // stored hash string (may be legacy or any modern format)
-        Func<string, Task> persistNewHashAsync) // called ONLY when an upgrade is needed
+    public async Task<(bool Verified, bool Upgraded)> VerifyAndCheckUpgradeAsync(
+        string input,
+        string? stored)
     {
-        return (await TryVerifyAndUpgradeAsync(input, stored, persistNewHashAsync)).Verified;
+        return await VerifyAndUpgradeAsync(input, stored, _ => Task.CompletedTask);
     }
 
-    /// <summary>
-    /// Similar to VerifyAndUpgradeAsync but returns both the verify result
-    /// and the upgrade result
-    /// </summary>
-    public async Task<(bool Verified, bool Upgraded)> TryVerifyAndUpgradeAsync(
+    public async Task<(bool Verified, bool Upgraded)> VerifyAndUpgradeAsync(
         string input,
         string? stored,
         Func<string, Task> persistNewHashAsync)

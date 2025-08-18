@@ -21,7 +21,7 @@ public interface IMultiEncyrption : IEncryptionV2
     ///     (true, false) if the input verified against the stored and the alg was the latest
     ///     (true, true) if the input verified against the stored and the stored requires an upgrade
     /// </returns>
-    public Task<(bool Verified, bool Upgraded)> VerifyAndCheckUpgradeAsync(
+    public Task<(bool Verified, bool RequiresUpgrade)> VerifyAndCheckUpgradeAsync(
         string input,
         string? stored);
 

@@ -85,7 +85,7 @@ internal sealed class MultiEncryption : IMultiEncyrption, IDisposable
         return _algorithms.Any(a => a.IsTargetFormat(input));
     }
 
-    public async Task<(bool Verified, bool Upgraded)> VerifyAndCheckUpgradeAsync(
+    public async Task<(bool Verified, bool RequiresUpgrade)> VerifyAndCheckUpgradeAsync(
         string input,
         string? stored)
     {

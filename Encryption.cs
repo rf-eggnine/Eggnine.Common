@@ -3,21 +3,33 @@
 // See LICENSE file in the project root for full license information.
 
 using System;
+using System.Collections.Concurrent;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading.Tasks;
+using System.Threading;
 
 namespace Eggnine.Common;
 
 internal class Encryption : IEncryption, IDisposable
 {
     private readonly RandomNumberGenerator _saltProvider = RandomNumberGenerator.Create();
-    private readonly SHA256 _hasher = SHA256.Create();
+    private readonly ConcurrentQueue<SHA256> _hashers = new();
+
+    private readonly int numberOfHashers = Math.Max(1, Environment.ProcessorCount - 1);
+    private readonly SemaphoreSlim _semaphore;
     private bool _disposed;
     private readonly long _iterations;
     private readonly int _saltLength;
 
-    public Encryption(long iterations = 1024*1024, int saltLength = 32)
+    public Encryption(long iterations = 1024*512, int saltLength = 32)
     {
+        _semaphore = new(numberOfHashers - 1);
+        for (int i = 0; i < numberOfHashers; i++)
+        {
+            _hashers.Enqueue(SHA256.Create());
+        }
         _iterations = iterations;
         _saltLength = saltLength;
     }
@@ -45,12 +57,32 @@ internal class Encryption : IEncryption, IDisposable
 
     private string Hash(string toHash, byte[] salt, long iterations)
     {
-        string hashed = Convert.ToBase64String(_hasher.ComputeHash(Salt(toHash, salt)));
-        for (int i = 0; i < iterations; i++)
+        _semaphore.Wait();
+        try
         {
-            hashed = Convert.ToBase64String(_hasher.ComputeHash(Salt(hashed, salt)));
+            SHA256? hasher = null;
+            while (!_hashers.TryDequeue(out hasher))
+            {
+                Task.Yield();
+            }
+            try
+                {
+                    string hashed = Convert.ToBase64String(hasher.ComputeHash(Salt(toHash, salt)));
+                    for (int i = 0; i < iterations; i++)
+                    {
+                        hashed = Convert.ToBase64String(hasher.ComputeHash(Salt(hashed, salt)));
+                    }
+                    return hashed;
+                }
+                finally
+                {
+                    _hashers.Append(hasher);
+                }
         }
-        return hashed;
+        finally
+        {
+            _semaphore.Release();
+        }
     }
 
     private byte[] Salt(string toSaltStr, byte[] salt)
@@ -116,7 +148,11 @@ internal class Encryption : IEncryption, IDisposable
         {
             _disposed = true;
             _saltProvider.Dispose();
-            _hasher.Dispose();
+            while (!_hashers.IsEmpty)
+            {
+                SHA256 hasher = _hashers.TakeLast(1).Single();
+                hasher.Dispose();
+            }
         }
     }
 }

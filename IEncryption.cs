@@ -9,4 +9,9 @@ public interface IEncryption
     public string Encrypt(string toEncrypt);
 
     public bool VerifyEncryption(string toVerify, string base64Hash);
+
+    internal static IEncryption GetEncryption(EncryptionOptions options)
+    {
+        return new Encryption(options.Iterations, options.SaltLength);
+    }
 }

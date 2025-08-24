@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace Eggnine.Common;
 
-public interface IMultiEncyrption : IEncryptionV2
+public interface IMultiEncryption : IEncryptionV2
 {
     /// <summary>
     /// Verify input against 'stored' using a flexible verifier (e.g., CompatEncryption).
@@ -41,4 +41,13 @@ public interface IMultiEncyrption : IEncryptionV2
         string input,
         string? stored,
         Func<string, Task> persistNewHashAsync);
+
+    internal static IMultiEncryption GetMultiEncryption(EncryptionOptions options)
+    {
+        IEncryption legacy = GetEncryption(options);
+        IEncryptionV2 secondary = new EncryptionV2(options.Iterations, options.SaltLength, options.HashLength);
+        IEncryptionV2 preferred = options.KeyRing is null ? secondary
+            : new EncryptionV2Peppered(options.KeyRing, options.Iterations, options.SaltLength, options.HashLength);
+        return new MultiEncryption([preferred, secondary], preferred, legacy);
+    }
 }

@@ -11,10 +11,9 @@ public static class ServiceCollectionExtensions
     public static T AddEncryption<T>(this T serviceCollection, EncryptionOptions encryptionOptions)
         where T : IServiceCollection
     {
-        IEncryption legacy = new Encryption(encryptionOptions.Iterations, encryptionOptions.SaltLength);
-        IEncryptionV2 v2 = new EncryptionV2(encryptionOptions.Iterations, encryptionOptions.SaltLength, encryptionOptions.HashLength);
-        IEncryptionV2 v2Pepper = new EncryptionV2Peppered(encryptionOptions.keyRing!, encryptionOptions.Iterations, encryptionOptions.SaltLength, encryptionOptions.HashLength);
-        IMultiEncyrption multiEncyrption = new MultiEncryption([v2Pepper, v2], v2Pepper, legacy);
+        IMultiEncryption multiEncyrption = IMultiEncryption.GetMultiEncryption(encryptionOptions);
+        serviceCollection.AddSingleton<IEncryption>(multiEncyrption);
+        serviceCollection.AddSingleton<IEncryptionV2>(multiEncyrption);
         serviceCollection.AddSingleton(multiEncyrption);
         return serviceCollection;
     }

@@ -1,4 +1,4 @@
-// Copyright © 2025 RF@Eggnine.com
+// Copyright © 2025-2026 RF@Eggnine.com
 // Licensed under the MIT License. See LICENSE file in the project root.
 
 using Microsoft.Extensions.DependencyInjection;

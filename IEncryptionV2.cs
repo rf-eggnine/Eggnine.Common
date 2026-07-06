@@ -6,8 +6,12 @@ using System;
 
 namespace Eggnine.Common;
 
-public interface IEncryptionV2 : IEncryption, IDisposable
+public interface IEncryptionV2 : IDisposable
 {
+    public string Encrypt(string toEncrypt);
+
+    public bool VerifyEncryption(string toVerify, string encoded);
+
     /// <summary>
     /// Indicates if one or more algorithms available matches the signature of <see cref="toVerify"/>
     /// </summary>

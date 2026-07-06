@@ -13,7 +13,6 @@ internal sealed class MultiEncryption : IMultiEncryption, IDisposable
 {
     private readonly IReadOnlyList<IEncryptionV2> _algorithms;
     private readonly IEncryptionV2 _preferred; // used for Encrypt()
-    private readonly IEncryption? _legacyFallback; // used only for Verify if no algo matches
     private bool _disposed;
 
     /// <param name="algorithms">
@@ -23,19 +22,14 @@ internal sealed class MultiEncryption : IMultiEncryption, IDisposable
     /// <param name="preferred">
     /// If null, the first element of <paramref name="algorithms"/> is used for Encrypt().
     /// </param>
-    /// <param name="legacyFallback">
-    /// Optional legacy verifier (e.g., your original Encryption) for rows without recognizable headers.
-    /// </param>
     public MultiEncryption(IEnumerable<IEncryptionV2> algorithms,
-                            IEncryptionV2? preferred = null,
-                            IEncryption? legacyFallback = null)
+                            IEncryptionV2? preferred = null)
     {
         _algorithms = (algorithms ?? throw new ArgumentNullException(nameof(algorithms))).ToArray();
         if (_algorithms.Count == 0)
             throw new ArgumentException("At least one algorithm must be provided.", nameof(algorithms));
 
         _preferred = preferred ?? _algorithms[0];
-        _legacyFallback = legacyFallback;
     }
 
     /// <summary>
@@ -50,7 +44,6 @@ internal sealed class MultiEncryption : IMultiEncryption, IDisposable
     /// <summary>
     /// Verify against the provided stored hash.
     /// Tries algorithms in order where MatchesAlg(stored) == true.
-    /// If none match and a legacy fallback is configured, uses it.
     /// </summary>
     public bool VerifyEncryption(string input, string stored)
     {
@@ -58,23 +51,17 @@ internal sealed class MultiEncryption : IMultiEncryption, IDisposable
         if (string.IsNullOrWhiteSpace(stored))
             return false;
 
-        // Try modern algos first
         foreach (var alg in _algorithms)
         {
             if (alg.IsTargetFormat(stored))
                 return alg.VerifyEncryption(input, stored);
         }
 
-        // Fallback for legacy rows without recognizable headers
-        if (_legacyFallback is not null)
-            return _legacyFallback.VerifyEncryption(input, stored);
-
         return false;
     }
 
     /// <summary>
     /// Returns true if any contained algorithm recognizes the format.
-    /// Legacy fallback is NOT considered a match (no header to detect).
     /// </summary>
     public bool IsTargetFormat(string input)
     {
@@ -123,8 +110,6 @@ internal sealed class MultiEncryption : IMultiEncryption, IDisposable
 
         foreach (var a in _algorithms)
             (a as IDisposable)?.Dispose();
-
-        (_legacyFallback as IDisposable)?.Dispose();
     }
 
     private void CheckDisposed()

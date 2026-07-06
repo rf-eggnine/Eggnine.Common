@@ -12,7 +12,6 @@ public static class ServiceCollectionExtensions
         where T : IServiceCollection
     {
         IMultiEncryption multiEncyrption = IMultiEncryption.GetMultiEncryption(encryptionOptions);
-        serviceCollection.AddSingleton<IEncryption>(multiEncyrption);
         serviceCollection.AddSingleton<IEncryptionV2>(multiEncyrption);
         serviceCollection.AddSingleton(multiEncyrption);
         return serviceCollection;

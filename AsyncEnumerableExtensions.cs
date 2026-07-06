@@ -18,8 +18,11 @@ public static class AsyncEnumerableExtensions
 
     public static async Task<T> FirstAsync<T>(this IAsyncEnumerable<T> enumerable, CancellationToken cancellationToken = default)
     {
-        IAsyncEnumerator<T> enumerator = enumerable.GetAsyncEnumerator();
-        await Task.Run(async() => await enumerator.MoveNextAsync(), cancellationToken);
+        await using IAsyncEnumerator<T> enumerator = enumerable.GetAsyncEnumerator(cancellationToken);
+        if (!await enumerator.MoveNextAsync())
+        {
+            throw new InvalidOperationException("Sequence contains no elements.");
+        }
         return enumerator.Current;
     }
 }

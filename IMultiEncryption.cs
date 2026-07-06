@@ -44,10 +44,9 @@ public interface IMultiEncryption : IEncryptionV2
 
     internal static IMultiEncryption GetMultiEncryption(EncryptionOptions options)
     {
-        IEncryption legacy = GetEncryption(options);
         IEncryptionV2 secondary = new EncryptionV2(options.Iterations, options.SaltLength, options.HashLength);
         IEncryptionV2 preferred = options.KeyRing is null ? secondary
             : new EncryptionV2Peppered(options.KeyRing, options.Iterations, options.SaltLength, options.HashLength);
-        return new MultiEncryption([preferred, secondary], preferred, legacy);
+        return new MultiEncryption([preferred, secondary], preferred);
     }
 }

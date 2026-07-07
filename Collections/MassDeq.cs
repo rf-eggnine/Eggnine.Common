@@ -17,7 +17,7 @@ namespace Eggnine.Common.Collections;
 /// <see cref="InsertBefore"/>, <see cref="CloneReverse"/>) walk the live list directly under the
 /// same lock instead, avoiding that copy since they never release the lock mid-walk.
 /// </summary>
-public sealed class MassDeq<T> : ICollection<T>
+public sealed class MassDeq<T> : IMassDeq<T>
 {
 
     public MassDeq()
@@ -380,4 +380,15 @@ public sealed class MassDeq<T> : ICollection<T>
             return (false, default);
         }
     }
+
+    bool IMassDeq<T>.TryMassDequeue(Func<T, bool> predicate, out IMassDeq<T> segment)
+    {
+        bool result = TryMassDequeue(predicate, out MassDeq<T> concreteSegment);
+        segment = concreteSegment;
+        return result;
+    }
+
+    IMassDeq<T> IMassDeq<T>.Clone(Func<T, bool>? wherePredicate) => Clone(wherePredicate);
+
+    IMassDeq<T> IMassDeq<T>.CloneReverse(Func<T, bool>? wherePredicate) => CloneReverse(wherePredicate);
 }

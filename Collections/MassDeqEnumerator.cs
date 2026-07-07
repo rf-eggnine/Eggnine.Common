@@ -118,82 +118,40 @@ public struct MassDeqEnumerator<T> : IEnumerator<T>
         }
         lock (_original._gate)
         {
-            T? t = default;
-            if (_original._head is not null)
+            // Splicing depends only on the node's own Prev/Next — those are absolute physical
+            // pointers (head always has Prev == null, tail always has Next == null) regardless of
+            // which direction this enumerator is walking, so there is no need to branch on
+            // _isReversed here at all.
+            T removed = _current.Value;
+            MassDeqNode<T>? prev = _current.Prev;
+            MassDeqNode<T>? next = _current.Next;
+
+            if (prev is null)
             {
-                t = _original._head.Value;
-            }
-            if (_isReversed)
-            {
-                if (_current.Next is null)
-                {
-                    _original._count--;
-                    _original._head = null;
-                    _original._tail = null;
-                    _current = null;
-                    _next = null;
-                    if (t is not null)
-                    {
-                        return t;
-                    }
-                    else
-                    {
-                        return default;
-                    }
-                }
-                if (_current.Prev is not null)
-                {
-                    _current.Prev.Next = _current.Next;
-                    _current.Next.Prev = _current.Prev;
-                }
-                else
-                {
-                    _current.Next.Prev = null;
-                }
-                // Detach the removed node's own pointers so a concurrent reader that already
-                // captured it as _current can't keep walking through it into stale/detached
-                // territory (mirrors TryDequeue's existing discipline).
-                _current.Next = null;
-                _current.Prev = null;
-                _original._count--;
+                _original._head = next;
             }
             else
             {
-                if (_current.Prev is null)
-                {
-                    _original.Clear();
-                    _current = null;
-                    _next = null;
-                    if (t is not null)
-                    {
-                        return t;
-                    }
-                    else
-                    {
-                        return default;
-                    }
-                }
-                if (_current.Next is not null)
-                {
-                    _current.Next.Prev = _current.Prev;
-                    _current.Prev.Next = _current.Next;
-                }
-                else
-                {
-                    _current.Prev.Next = null;
-                }
-                _current.Next = null;
-                _current.Prev = null;
-                _original._count--;
+                prev.Next = next;
             }
-            if (t is not null)
+
+            if (next is null)
             {
-                return t;
+                _original._tail = prev;
             }
             else
             {
-                return default;
+                next.Prev = prev;
             }
+
+            // Detach the removed node's own pointers so a concurrent reader that already
+            // captured it as _current can't keep walking through it into stale/detached
+            // territory (mirrors TryDequeue's existing discipline).
+            _current.Next = null;
+            _current.Prev = null;
+            _original._count--;
+
+            return removed;
         }
     }
 

@@ -85,7 +85,7 @@ public sealed class MassDeq<T> : IMassDeq<T>
     /// **ONLY RETURNS CONTIGUOUS SEGMENTS**
     /// If empty, returns false.
     /// </summary>
-    public bool TryMassDequeue(Func<T, bool> predicate, out MassDeq<T> segment)
+    public bool TryMassDequeue(Predicate<T> predicate, out MassDeq<T> segment)
     {
         MassDeqNode<T>? current;
         segment = new();
@@ -147,7 +147,7 @@ public sealed class MassDeq<T> : IMassDeq<T>
     /// happen under one lock hold, so a concurrent TryMassDequeue/TryRemove/etc. can't detach the
     /// found node between "found it" and "spliced next to it" (which would silently orphan the
     /// insert onto a detached segment the live deque no longer points to).</summary>
-    public bool InsertBefore(T item, Func<T, bool> predicate)
+    public bool InsertBefore(T item, Predicate<T> predicate)
     {
         lock (_gate)
         {
@@ -164,14 +164,14 @@ public sealed class MassDeq<T> : IMassDeq<T>
         }
     }
 
-    public MassDeq<T> Clone(Func<T, bool>? wherePredicate = null)
+    public MassDeq<T> Clone(Predicate<T>? wherePredicate = null)
     {
         MassDeq<T> toReturn = CloneReverse(wherePredicate);
         toReturn.Reverse();
         return toReturn;
     }
-    
-    public MassDeq<T> CloneReverse(Func<T, bool>? wherePredicate = null)
+
+    public MassDeq<T> CloneReverse(Predicate<T>? wherePredicate = null)
     {
         MassDeq<T> toReturn = new();
         lock (_gate)
@@ -359,13 +359,11 @@ public sealed class MassDeq<T> : IMassDeq<T>
         }
     }
 
-    bool ICollection<T>.Remove(T item)
-    {
-        var (success, value) = TryRemove(item);
-        return success;
-    }
+    bool ICollection<T>.Remove(T item) => TryRemove(item, out _);
 
-    public (bool Success, T? Value) TryRemove(T item)
+    /// <summary>Removes the first item equal to <paramref name="item"/>. Returns false, leaving
+    /// <paramref name="removed"/> default, if nothing matched.</summary>
+    public bool TryRemove(T item, out T? removed)
     {
         lock (_gate)
         {
@@ -374,21 +372,62 @@ public sealed class MassDeq<T> : IMassDeq<T>
             {
                 if (Equals(enumerator.Current, item))
                 {
-                    return (true, enumerator.Remove());
+                    removed = enumerator.Remove();
+                    return true;
                 }
             }
-            return (false, default);
+            removed = default;
+            return false;
         }
     }
 
-    bool IMassDeq<T>.TryMassDequeue(Func<T, bool> predicate, out IMassDeq<T> segment)
+    /// <summary>Looks at the next item <see cref="Dequeue"/>/<see cref="TryDequeue"/> would return,
+    /// without removing it. Returns false if the deque is empty.</summary>
+    public bool TryPeek(out T item)
+    {
+        lock (_gate)
+        {
+            MassDeqNode<T>? node = _isReversed ? _head : _tail;
+            if (node is null)
+            {
+                item = default!;
+                return false;
+            }
+            item = node.Value;
+            return true;
+        }
+    }
+
+    /// <summary>Same as <see cref="TryPeek"/> but throws <see cref="InvalidOperationException"/>
+    /// instead of returning false when the deque is empty — matches <see cref="Queue{T}.Peek"/>.</summary>
+    public T Peek()
+    {
+        if (!TryPeek(out T item))
+        {
+            throw new InvalidOperationException("MassDeq is empty.");
+        }
+        return item;
+    }
+
+    /// <summary>Same as <see cref="TryDequeue"/> but throws <see cref="InvalidOperationException"/>
+    /// instead of returning false when the deque is empty — matches <see cref="Queue{T}.Dequeue"/>.</summary>
+    public T Dequeue()
+    {
+        if (!TryDequeue(out T item))
+        {
+            throw new InvalidOperationException("MassDeq is empty.");
+        }
+        return item;
+    }
+
+    bool IMassDeq<T>.TryMassDequeue(Predicate<T> predicate, out IMassDeq<T> segment)
     {
         bool result = TryMassDequeue(predicate, out MassDeq<T> concreteSegment);
         segment = concreteSegment;
         return result;
     }
 
-    IMassDeq<T> IMassDeq<T>.Clone(Func<T, bool>? wherePredicate) => Clone(wherePredicate);
+    IMassDeq<T> IMassDeq<T>.Clone(Predicate<T>? wherePredicate) => Clone(wherePredicate);
 
-    IMassDeq<T> IMassDeq<T>.CloneReverse(Func<T, bool>? wherePredicate) => CloneReverse(wherePredicate);
+    IMassDeq<T> IMassDeq<T>.CloneReverse(Predicate<T>? wherePredicate) => CloneReverse(wherePredicate);
 }

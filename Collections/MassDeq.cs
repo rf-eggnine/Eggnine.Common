@@ -9,13 +9,21 @@ using System.Threading;
 namespace Eggnine.Common.Collections;
 
 /// <summary>
-/// Doubly-linked deque with O(1) Enqueue (head) and O(1) TryMassDequeue: enumerates until
-/// predicate(current.Value) is false, then splits. <c>foreach</c> (via the public
-/// <see cref="GetEnumerator"/>) takes a detached snapshot under one lock acquisition, so it is
-/// safe to enumerate concurrently with mutation from other threads: O(n) with one lock hold and
-/// one copy. The class's own splicing operations (<see cref="Contains"/>, <see cref="TryRemove"/>,
-/// <see cref="InsertBefore"/>, <see cref="CloneReverse"/>) walk the live list directly under the
-/// same lock instead, avoiding that copy since they never release the lock mid-walk.
+/// Doubly-linked deque with O(1) operations at either end and O(1) TryMassDequeue: enumerates
+/// until predicate(current.Value) is false, then splits. Every member names the physical end it
+/// operates on explicitly (<see cref="EnqueueHead"/>/<see cref="EnqueueTail"/>,
+/// <see cref="TryDequeueHead"/>/<see cref="TryDequeueTail"/>, <see cref="TryPeekHead"/>/
+/// <see cref="TryPeekTail"/>) rather than relying on a BCL-Queue-style implicit convention —
+/// nothing here is a "front" or "back" you have to remember, it's always literally the head or
+/// the tail. Enumeration (via <c>foreach</c>/<see cref="GetEnumerator"/>) always walks head to
+/// tail; <see cref="GetReversedEnumerator"/> walks the other direction for callers that
+/// specifically need that, without any mutable per-instance "reversed" state to reason about.
+/// <c>foreach</c>/<see cref="GetEnumerator"/>/<see cref="GetReversedEnumerator"/> all take a
+/// detached snapshot under one lock acquisition, so it is safe to enumerate concurrently with
+/// mutation from other threads: O(n) with one lock hold and one copy. The class's own splicing
+/// operations (<see cref="Contains"/>, <see cref="TryRemove"/>, <see cref="InsertBefore"/>,
+/// <see cref="CloneReverse"/>) walk the live list directly under the same lock instead, avoiding
+/// that copy since they never release the lock mid-walk.
 /// </summary>
 public sealed class MassDeq<T> : IMassDeq<T>
 {
@@ -35,23 +43,12 @@ public sealed class MassDeq<T> : IMassDeq<T>
     internal MassDeqNode<T>? _head;
     internal MassDeqNode<T>? _tail;
     internal int _count;
-    internal bool _isReversed;
     public int Count => Volatile.Read(ref _count);
-
-    public bool IsReversed => _isReversed;
 
     public bool IsReadOnly => false;
 
-    public void Reverse()
-    {
-        lock (_gate)
-        {
-            _isReversed = !_isReversed;
-        }
-    }
-
-    /// <summary>Prepend at head. O(1).</summary>
-    public void Enqueue(T item)
+    /// <summary>Insert at the head (front). O(1).</summary>
+    public void EnqueueHead(T item)
     {
         MassDeqNode<T> node = new(item);
         lock (_gate)
@@ -63,25 +60,38 @@ public sealed class MassDeq<T> : IMassDeq<T>
             }
             else
             {
-                if (_isReversed)
-                {
-                    node.Prev = _tail;
-                    _tail.Next = node;
-                    _tail = node;
-                }
-                else
-                {
-                    node.Next = _head;
-                    _head.Prev = node;
-                    _head = node;
-                }
+                node.Next = _head;
+                _head.Prev = node;
+                _head = node;
+            }
+            _count++;
+        }
+    }
+
+    /// <summary>Insert at the tail (back). O(1).</summary>
+    public void EnqueueTail(T item)
+    {
+        MassDeqNode<T> node = new(item);
+        lock (_gate)
+        {
+            if (_head is null || _tail is null)
+            {
+                _head = node;
+                _tail = node;
+            }
+            else
+            {
+                node.Prev = _tail;
+                _tail.Next = node;
+                _tail = node;
             }
             _count++;
         }
     }
 
     /// <summary>
-    /// Detach until predicate returns false or entire list.
+    /// Detach a contiguous run starting from the head, for as long as
+    /// <paramref name="predicate"/> holds, returning it as a new deque.
     /// **ONLY RETURNS CONTIGUOUS SEGMENTS**
     /// If empty, returns false.
     /// </summary>
@@ -95,45 +105,36 @@ public sealed class MassDeq<T> : IMassDeq<T>
             {
                 return false;
             }
-            if (!predicate(_isReversed ? _head.Value : _tail.Value))
+            if (!predicate(_head.Value))
             {
                 return false;
             }
-            current = _isReversed ? _head : _tail;
-            MassDeqNode<T> headTail = current;
+            current = _head;
+            MassDeqNode<T> originalHead = current;
             for (int newCount = 1; current is not null; newCount++)
             {
-                MassDeqNode<T>? nextPrev = _isReversed ? current.Next : current.Prev;
-                if (nextPrev is null)
+                MassDeqNode<T>? next = current.Next;
+                if (next is null)
                 {
-                    segment = new(current, headTail, _count)
-                    {
-                        _isReversed = _isReversed
-                    };
+                    // Entire list matched.
+                    segment = new(originalHead, current, _count);
                     _head = null;
                     _tail = null;
                     _count = 0;
                     return true;
                 }
-                if (predicate(nextPrev.Value))
+                if (predicate(next.Value))
                 {
-                    current = nextPrev;
+                    current = next;
                 }
                 else
                 {
-                    segment = new(current, headTail, newCount);
-                    if (_isReversed)
-                    {
-                        nextPrev.Prev = null;
-                        _head = current.Next;
-                        current.Next = null;
-                    }
-                    else
-                    {
-                        nextPrev.Next = null;
-                        _tail = current.Prev;
-                        current.Prev = null;
-                    }
+                    // segment spans [originalHead .. current] — head-to-tail order preserved,
+                    // matching this deque's own head-is-front convention.
+                    segment = new(originalHead, current, newCount);
+                    next.Prev = null;
+                    _head = next;
+                    current.Next = null;
                     _count -= newCount;
                     return true;
                 }
@@ -164,13 +165,27 @@ public sealed class MassDeq<T> : IMassDeq<T>
         }
     }
 
+    /// <summary>Faithful copy — same head-to-tail order as this deque.</summary>
     public MassDeq<T> Clone(Predicate<T>? wherePredicate = null)
     {
-        MassDeq<T> toReturn = CloneReverse(wherePredicate);
-        toReturn.Reverse();
+        MassDeq<T> toReturn = new();
+        lock (_gate)
+        {
+            for (MassDeqEnumerator<T> enumerator = GetLiveEnumerator(); enumerator.MoveNext();)
+            {
+                T value = enumerator.Current;
+                if (wherePredicate == null || wherePredicate(value))
+                {
+                    toReturn.EnqueueTail(value);
+                }
+            }
+        }
         return toReturn;
     }
 
+    /// <summary>Same as <see cref="Clone"/> but the copy comes out in reverse (tail-to-head)
+    /// order — walks this deque head-to-tail once, prepending each match, so the last item
+    /// visited (this deque's own tail) ends up at the clone's head.</summary>
     public MassDeq<T> CloneReverse(Predicate<T>? wherePredicate = null)
     {
         MassDeq<T> toReturn = new();
@@ -179,9 +194,9 @@ public sealed class MassDeq<T> : IMassDeq<T>
             for (MassDeqEnumerator<T> enumerator = GetLiveEnumerator(); enumerator.MoveNext();)
             {
                 T value = enumerator.Current;
-                if (wherePredicate == null ? true : wherePredicate(value))
+                if (wherePredicate == null || wherePredicate(value))
                 {
-                    toReturn.Enqueue(value);
+                    toReturn.EnqueueHead(value);
                 }
             }
         }
@@ -194,10 +209,10 @@ public sealed class MassDeq<T> : IMassDeq<T>
     }
 
     /// <summary>
-    /// Removes a single item from the tail in O(1) time.
+    /// Removes a single item from the head (front) in O(1) time.
     /// Returns false if the deque is empty.
     /// </summary>
-    public bool TryDequeue(out T item)
+    public bool TryDequeueHead(out T item)
     {
         lock (_gate)
         {
@@ -207,10 +222,10 @@ public sealed class MassDeq<T> : IMassDeq<T>
                 return false;
             }
 
-            MassDeqNode<T> node = _isReversed ? _head : _tail;
+            MassDeqNode<T> node = _head;
             item = node.Value;
 
-            if ((_isReversed ? node.Next : node.Prev) is null)
+            if (node.Next is null)
             {
                 // Only one element in the deque.
                 _head = null;
@@ -218,19 +233,43 @@ public sealed class MassDeq<T> : IMassDeq<T>
             }
             else
             {
-                // Detach the head or tail node.
-                if (_isReversed)
-                {
-                    _head = node.Next;
-                    _head!.Prev = null;
-                    node.Next = null;
-                }
-                else
-                {
-                    _tail = node.Prev;
-                    _tail!.Next = null;
-                    node.Prev = null;
-                }
+                _head = node.Next;
+                _head.Prev = null;
+                node.Next = null;
+            }
+            _count--;
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Removes a single item from the tail (back) in O(1) time.
+    /// Returns false if the deque is empty.
+    /// </summary>
+    public bool TryDequeueTail(out T item)
+    {
+        lock (_gate)
+        {
+            if (_tail is null || _head is null)
+            {
+                item = default!;
+                return false;
+            }
+
+            MassDeqNode<T> node = _tail;
+            item = node.Value;
+
+            if (node.Prev is null)
+            {
+                // Only one element in the deque.
+                _head = null;
+                _tail = null;
+            }
+            else
+            {
+                _tail = node.Prev;
+                _tail.Next = null;
+                node.Prev = null;
             }
             _count--;
             return true;
@@ -239,12 +278,13 @@ public sealed class MassDeq<T> : IMassDeq<T>
 
 
     /// <summary>
-    /// Returns a detached, immutable snapshot enumerator, what <c>foreach</c> binds to. Safe to
-    /// walk concurrently with mutation on the live deque: the snapshot is copied under one
-    /// <see cref="_gate"/> acquisition before this method returns, so nothing the caller does
-    /// afterward can observe a concurrent Enqueue/TryDequeue/TryRemove. Calling
-    /// <see cref="MassDeqEnumerator{T}.InsertBefore"/> or <see cref="MassDeqEnumerator{T}.Remove"/>
-    /// on the result throws, since there is no live list underneath it to splice into.
+    /// Returns a detached, immutable snapshot enumerator, what <c>foreach</c> binds to. Walks
+    /// head to tail. Safe to walk concurrently with mutation on the live deque: the snapshot is
+    /// copied under one <see cref="_gate"/> acquisition before this method returns, so nothing
+    /// the caller does afterward can observe a concurrent EnqueueHead/EnqueueTail/TryDequeueHead/
+    /// TryDequeueTail/TryRemove. Calling <see cref="MassDeqEnumerator{T}.InsertBefore"/> or
+    /// <see cref="MassDeqEnumerator{T}.Remove"/> on the result throws, since there is no live list
+    /// underneath it to splice into.
     /// </summary>
     public MassDeqEnumerator<T> GetEnumerator()
     {
@@ -252,7 +292,7 @@ public sealed class MassDeq<T> : IMassDeq<T>
         {
             MassDeqNode<T>? snapshotHead = null;
             MassDeqNode<T>? snapshotTail = null;
-            MassDeqNode<T>? source = _isReversed ? _tail : _head;
+            MassDeqNode<T>? source = _head;
             while (source is not null)
             {
                 MassDeqNode<T> copy = new(source.Value);
@@ -266,7 +306,39 @@ public sealed class MassDeq<T> : IMassDeq<T>
                     copy.Prev = snapshotTail;
                 }
                 snapshotTail = copy;
-                source = _isReversed ? source.Prev : source.Next;
+                source = source.Next;
+            }
+            return new MassDeqEnumerator<T>(this, snapshotHead, isReversed: false, isSnapshot: true);
+        }
+    }
+
+    /// <summary>
+    /// Same as <see cref="GetEnumerator"/> but walks tail to head instead — for callers with a
+    /// specific need to consume the deque back-to-front without physically reversing it or
+    /// paying for a <see cref="CloneReverse"/>. A detached snapshot, same safety guarantees as
+    /// <see cref="GetEnumerator"/>.
+    /// </summary>
+    public MassDeqEnumerator<T> GetReversedEnumerator()
+    {
+        lock (_gate)
+        {
+            MassDeqNode<T>? snapshotHead = null;
+            MassDeqNode<T>? snapshotTail = null;
+            MassDeqNode<T>? source = _tail;
+            while (source is not null)
+            {
+                MassDeqNode<T> copy = new(source.Value);
+                if (snapshotTail is null)
+                {
+                    snapshotHead = copy;
+                }
+                else
+                {
+                    snapshotTail.Next = copy;
+                    copy.Prev = snapshotTail;
+                }
+                snapshotTail = copy;
+                source = source.Prev;
             }
             return new MassDeqEnumerator<T>(this, snapshotHead, isReversed: false, isSnapshot: true);
         }
@@ -275,13 +347,13 @@ public sealed class MassDeq<T> : IMassDeq<T>
     /// <summary>
     /// Returns an enumerator over the live list, for the class's own splicing operations
     /// (<see cref="Contains"/>, <see cref="TryRemove"/>, <see cref="InsertBefore"/>,
-    /// <see cref="CloneReverse"/>) to walk under a lock they already hold, without paying for a
-    /// snapshot copy they'd immediately discard. Not safe to use outside a <see cref="_gate"/>
-    /// hold, hence internal rather than public.
+    /// <see cref="Clone"/>, <see cref="CloneReverse"/>) to walk under a lock they already hold,
+    /// without paying for a snapshot copy they'd immediately discard. Always walks head to tail —
+    /// not safe to use outside a <see cref="_gate"/> hold, hence internal rather than public.
     /// </summary>
     internal MassDeqEnumerator<T> GetLiveEnumerator()
     {
-        return new MassDeqEnumerator<T>(this, _isReversed ? _tail : _head, _isReversed);
+        return new MassDeqEnumerator<T>(this, _head, isReversed: false);
     }
 
     IEnumerator<T> IEnumerable<T>.GetEnumerator()
@@ -295,7 +367,7 @@ public sealed class MassDeq<T> : IMassDeq<T>
 
     public void Add(T item)
     {
-        Enqueue(item);
+        EnqueueTail(item);
     }
 
     public void Clear()
@@ -305,7 +377,6 @@ public sealed class MassDeq<T> : IMassDeq<T>
             _head = null;
             _tail = null;
             _count = 0;
-            _isReversed = false;
         }
         return;
     }
@@ -335,7 +406,7 @@ public sealed class MassDeq<T> : IMassDeq<T>
 
     public void CopyTo(T[] array, int arrayIndex)
     {
-        MassDeq<T> reverseClone;
+        MassDeq<T> clone;
         lock (_gate)
         {
             if (array is null)
@@ -350,10 +421,10 @@ public sealed class MassDeq<T> : IMassDeq<T>
             {
                 throw new ArgumentException("The number of elements in the source MassDeq is greater than the available space from arrayIndex to the end of the destination array.");
             }
-            reverseClone = CloneReverse();
+            clone = Clone();
         }
         T t = default!;
-        while (arrayIndex < array.Length && reverseClone.TryDequeue(out t))
+        while (arrayIndex < array.Length && clone.TryDequeueHead(out t))
         {
             array[arrayIndex++] = t;
         }
@@ -361,8 +432,9 @@ public sealed class MassDeq<T> : IMassDeq<T>
 
     bool ICollection<T>.Remove(T item) => TryRemove(item, out _);
 
-    /// <summary>Removes the first item equal to <paramref name="item"/>. Returns false, leaving
-    /// <paramref name="removed"/> default, if nothing matched.</summary>
+    /// <summary>Removes the first item equal to <paramref name="item"/>, in head-to-tail
+    /// (enumeration) order. Returns false, leaving <paramref name="removed"/> default, if nothing
+    /// matched.</summary>
     public bool TryRemove(T item, out T? removed)
     {
         lock (_gate)
@@ -381,13 +453,13 @@ public sealed class MassDeq<T> : IMassDeq<T>
         }
     }
 
-    /// <summary>Looks at the next item <see cref="Dequeue"/>/<see cref="TryDequeue"/> would return,
-    /// without removing it. Returns false if the deque is empty.</summary>
-    public bool TryPeek(out T item)
+    /// <summary>Looks at the item <see cref="DequeueHead"/>/<see cref="TryDequeueHead"/> would
+    /// return, without removing it. Returns false if the deque is empty.</summary>
+    public bool TryPeekHead(out T item)
     {
         lock (_gate)
         {
-            MassDeqNode<T>? node = _isReversed ? _head : _tail;
+            MassDeqNode<T>? node = _head;
             if (node is null)
             {
                 item = default!;
@@ -398,22 +470,61 @@ public sealed class MassDeq<T> : IMassDeq<T>
         }
     }
 
-    /// <summary>Same as <see cref="TryPeek"/> but throws <see cref="InvalidOperationException"/>
-    /// instead of returning false when the deque is empty — matches <see cref="Queue{T}.Peek"/>.</summary>
-    public T Peek()
+    /// <summary>Looks at the item <see cref="DequeueTail"/>/<see cref="TryDequeueTail"/> would
+    /// return, without removing it. Returns false if the deque is empty.</summary>
+    public bool TryPeekTail(out T item)
     {
-        if (!TryPeek(out T item))
+        lock (_gate)
+        {
+            MassDeqNode<T>? node = _tail;
+            if (node is null)
+            {
+                item = default!;
+                return false;
+            }
+            item = node.Value;
+            return true;
+        }
+    }
+
+    /// <summary>Same as <see cref="TryPeekHead"/> but throws <see cref="InvalidOperationException"/>
+    /// instead of returning false when the deque is empty — matches <see cref="Queue{T}.Peek"/>.</summary>
+    public T PeekHead()
+    {
+        if (!TryPeekHead(out T item))
         {
             throw new InvalidOperationException("MassDeq is empty.");
         }
         return item;
     }
 
-    /// <summary>Same as <see cref="TryDequeue"/> but throws <see cref="InvalidOperationException"/>
-    /// instead of returning false when the deque is empty — matches <see cref="Queue{T}.Dequeue"/>.</summary>
-    public T Dequeue()
+    /// <summary>Same as <see cref="TryPeekTail"/> but throws <see cref="InvalidOperationException"/>
+    /// instead of returning false when the deque is empty.</summary>
+    public T PeekTail()
     {
-        if (!TryDequeue(out T item))
+        if (!TryPeekTail(out T item))
+        {
+            throw new InvalidOperationException("MassDeq is empty.");
+        }
+        return item;
+    }
+
+    /// <summary>Same as <see cref="TryDequeueHead"/> but throws <see cref="InvalidOperationException"/>
+    /// instead of returning false when the deque is empty — matches <see cref="Queue{T}.Dequeue"/>.</summary>
+    public T DequeueHead()
+    {
+        if (!TryDequeueHead(out T item))
+        {
+            throw new InvalidOperationException("MassDeq is empty.");
+        }
+        return item;
+    }
+
+    /// <summary>Same as <see cref="TryDequeueTail"/> but throws <see cref="InvalidOperationException"/>
+    /// instead of returning false when the deque is empty.</summary>
+    public T DequeueTail()
+    {
+        if (!TryDequeueTail(out T item))
         {
             throw new InvalidOperationException("MassDeq is empty.");
         }

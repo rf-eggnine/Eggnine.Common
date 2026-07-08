@@ -2,6 +2,56 @@
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer.
 
+## 5.0.0 - 2026-07-08
+
+### Fixed
+
+- **`MassDeq<T>` enumeration order didn't match dequeue order.** `Enqueue` prepended at `_head`,
+  and `GetEnumerator`/`GetLiveEnumerator` also started from `_head` — meaning enumeration (and
+  therefore `foreach`, `.ToList()`, `.First()`, `ICollection<T>.Remove`, `Contains`, `CopyTo`)
+  yielded items newest-first, the *opposite* of what `TryDequeue` would actually remove first.
+  Found while tracing a real bug in a consumer (`GameEngineQueue.RiffConsumeLoopAsync`) that
+  assumed `.First()` meant "the oldest item," matching `System.Collections.Generic.Queue<T>`
+  convention — it didn't. Root cause was one direction mismatch between insertion and
+  enumeration; traced through by hand to confirm `TryDequeue`/`TryPeek` were already internally
+  consistent with each other (both already used `_tail`), so the fix only ever touched which
+  physical end insertion and enumeration point at, not the linked-list splicing itself.
+- **`TryMassDequeue`'s returned segment had its own head/tail swapped** relative to the
+  now-corrected head-is-front convention — surfaced only once enumeration order itself was fixed
+  and re-verified by hand.
+- **`CopyTo` composed `CloneReverse` + front-removal**, which happened to produce
+  enumeration-order output only because enumeration order itself was backwards; fixed to compose
+  `Clone` + `TryDequeueHead`, matching the corrected convention.
+- Typo in `MassDeqEnumerator.Remove()`'s exception message ("Cannont" → "Cannot").
+
+### Changed
+
+- **Breaking, and a bigger API reshape than the fix above required on its own**: replaced the
+  implicit BCL-`Queue<T>`-style convention (`Enqueue`/`TryDequeue`/`TryPeek` silently default to
+  one physical end each, and used to be swappable instance-wide via `Reverse()`/`IsReversed`)
+  with a fully explicit head/tail API. Every insert/remove/peek operation now names the physical
+  end it acts on: `EnqueueHead`/`EnqueueTail`, `TryDequeueHead`/`DequeueHead`/`TryDequeueTail`/
+  `DequeueTail`, `TryPeekHead`/`PeekHead`/`TryPeekTail`/`PeekTail`. All are O(1), matching the
+  structure's actual capability at either end (previously only exposed at one end each).
+  `Add(T)` now calls `EnqueueTail` (append, matching `List<T>.Add`-style semantics).
+- **Breaking**: removed `IsReversed`/`Reverse()` entirely, from both `MassDeq<T>` and
+  `IMassDeq<T>`. With every member now explicit about which physical end it targets, an
+  instance-wide "reversed" toggle had no remaining job except enumeration direction — and that's
+  now served by the new `GetReversedEnumerator()` (see below) without any mutable per-instance
+  state to reason about.
+- **Breaking**: `Clone`/`CloneReverse` are no longer composed as `CloneReverse(...).Reverse()` —
+  standalone implementations now that `Reverse()` is gone. `Clone` walks head-to-tail and calls
+  `EnqueueTail` (faithful copy); `CloneReverse` walks head-to-tail and calls `EnqueueHead`
+  (genuinely reversed copy) — behavior is unchanged, just no longer dependent on the removed
+  method.
+
+### Added
+
+- `GetReversedEnumerator()` on the concrete `MassDeq<T>` — a detached snapshot enumerator, same
+  safety guarantees as `GetEnumerator()`, walking tail-to-head instead of head-to-tail. Not added
+  to `IMassDeq<T>`, matching `GetEnumerator()`'s own precedent of being a concrete-type-only
+  member (the interface only ever exposed the boxed `IEnumerable<T>.GetEnumerator()`).
+
 ## 4.0.0 - 2026-07-07
 
 ### Fixed

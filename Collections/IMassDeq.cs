@@ -8,7 +8,7 @@ namespace Eggnine.Common.Collections;
 
 /// <summary>
 /// Members <see cref="MassDeq{T}"/> offers beyond the standard <see cref="ICollection{T}"/> surface:
-/// head-side insertion, contiguous mass-dequeue, predicate-based splicing, cloning, and a read-only
+/// tail-side insertion, contiguous mass-dequeue, predicate-based splicing, cloning, and a read-only
 /// view. Also declares <see cref="IReadOnlyCollection{T}"/> since <see cref="MassDeq{T}"/> already
 /// satisfies it structurally (via <see cref="ICollection{T}.Count"/> and its enumerator) — callers
 /// that only need read access can accept <see cref="IMassDeq{T}"/> directly without going through
@@ -16,34 +16,46 @@ namespace Eggnine.Common.Collections;
 /// </summary>
 public interface IMassDeq<T> : ICollection<T>, IReadOnlyCollection<T>
 {
-    /// <summary>True if the deque is currently walking head-to-tail in reverse (see <see cref="Reverse"/>).</summary>
-    bool IsReversed { get; }
+    /// <summary>Insert at the head (front). O(1).</summary>
+    void EnqueueHead(T item);
 
-    /// <summary>Flips which end Enqueue/TryDequeue/enumeration treat as head. O(1).</summary>
-    void Reverse();
+    /// <summary>Insert at the tail (back). O(1).</summary>
+    void EnqueueTail(T item);
 
-    /// <summary>Prepend at head. O(1).</summary>
-    void Enqueue(T item);
+    /// <summary>Removes a single item from the head (front) in O(1) time. Returns false if the deque is empty.</summary>
+    bool TryDequeueHead(out T item);
 
-    /// <summary>Removes a single item from the tail in O(1) time. Returns false if the deque is empty.</summary>
-    bool TryDequeue(out T item);
-
-    /// <summary>Same as <see cref="TryDequeue"/> but throws <see cref="InvalidOperationException"/>
+    /// <summary>Same as <see cref="TryDequeueHead"/> but throws <see cref="InvalidOperationException"/>
     /// instead of returning false when the deque is empty — matches <see cref="Queue{T}.Dequeue"/>.</summary>
-    T Dequeue();
+    T DequeueHead();
 
-    /// <summary>Looks at the next item <see cref="Dequeue"/>/<see cref="TryDequeue"/> would return,
+    /// <summary>Removes a single item from the tail (back) in O(1) time. Returns false if the deque is empty.</summary>
+    bool TryDequeueTail(out T item);
+
+    /// <summary>Same as <see cref="TryDequeueTail"/> but throws <see cref="InvalidOperationException"/>
+    /// instead of returning false when the deque is empty.</summary>
+    T DequeueTail();
+
+    /// <summary>Looks at the item <see cref="DequeueHead"/>/<see cref="TryDequeueHead"/> would return,
     /// without removing it. Returns false if the deque is empty.</summary>
-    bool TryPeek(out T item);
+    bool TryPeekHead(out T item);
 
-    /// <summary>Same as <see cref="TryPeek"/> but throws <see cref="InvalidOperationException"/>
+    /// <summary>Same as <see cref="TryPeekHead"/> but throws <see cref="InvalidOperationException"/>
     /// instead of returning false when the deque is empty — matches <see cref="Queue{T}.Peek"/>.</summary>
-    T Peek();
+    T PeekHead();
+
+    /// <summary>Looks at the item <see cref="DequeueTail"/>/<see cref="TryDequeueTail"/> would return,
+    /// without removing it. Returns false if the deque is empty.</summary>
+    bool TryPeekTail(out T item);
+
+    /// <summary>Same as <see cref="TryPeekTail"/> but throws <see cref="InvalidOperationException"/>
+    /// instead of returning false when the deque is empty.</summary>
+    T PeekTail();
 
     /// <summary>
-    /// Detaches a contiguous run starting from the tail (or head, if <see cref="IsReversed"/>) for as
-    /// long as <paramref name="predicate"/> holds, returning it as a new deque. Returns false, leaving
-    /// this deque untouched, if empty or the boundary item doesn't match.
+    /// Detaches a contiguous run starting from the head, for as long as <paramref name="predicate"/>
+    /// holds, returning it as a new deque. Returns false, leaving this deque untouched, if empty
+    /// or the boundary item doesn't match.
     /// </summary>
     bool TryMassDequeue(Predicate<T> predicate, out IMassDeq<T> segment);
 

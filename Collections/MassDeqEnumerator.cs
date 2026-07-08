@@ -114,7 +114,7 @@ public struct MassDeqEnumerator<T> : IEnumerator<T>
         }
         if (_current is null)
         {
-            throw new InvalidOperationException("Cannont remove current before moveNext or after end of enumerable");
+            throw new InvalidOperationException("Cannot remove current before moveNext or after end of enumerable");
         }
         lock (_original._gate)
         {

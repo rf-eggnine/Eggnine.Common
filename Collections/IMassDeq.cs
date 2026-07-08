@@ -65,6 +65,12 @@ public interface IMassDeq<T> : ICollection<T>, IReadOnlyCollection<T>
     /// </summary>
     bool InsertBefore(T item, Predicate<T> predicate);
 
+    /// <summary>
+    /// Finds the first item matching <paramref name="predicate"/> and inserts <paramref name="item"/>
+    /// immediately after it, atomically. Returns false if nothing matched.
+    /// </summary>
+    bool InsertAfter(T item, Predicate<T> predicate);
+
     /// <summary>Removes the first item equal to <paramref name="item"/>. Returns false, leaving
     /// <paramref name="removed"/> default, if nothing matched.</summary>
     bool TryRemove(T item, out T? removed);

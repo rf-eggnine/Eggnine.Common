@@ -106,6 +106,43 @@ public struct MassDeqEnumerator<T> : IEnumerator<T>
         }
     }
 
+    public void InsertAfter(T item)
+    {
+        if (_isSnapshot)
+            throw new InvalidOperationException("Cannot insert into a snapshot enumerator (from foreach/GetEnumerator) — it is detached from the live deque. Use MassDeq<T>.InsertAfter instead.");
+        if (_current is null)
+            throw new InvalidOperationException("Cannot insert: enumeration has ended or has not started.");
+
+        lock (_original._gate)
+        {
+            MassDeqNode<T> node = new(item);
+
+            if (_isReversed)
+            {
+                // In reverse: enumerate tail→head, so "after" means before in physical order
+                node.Next = _current;
+                node.Prev = _current.Prev;
+                if (_current.Prev != null)
+                    _current.Prev.Next = node;
+                _current.Prev = node;
+                if (_current == _original._head)
+                    _original._head = node;
+            }
+            else
+            {
+                // Normal: enumerate head→tail, insert after in physical order
+                node.Prev = _current;
+                node.Next = _current.Next;
+                if (_current.Next != null)
+                    _current.Next.Prev = node;
+                _current.Next = node;
+                if (_current == _original._tail)
+                    _original._tail = node;
+            }
+            _original._count++;
+        }
+    }
+
     public T? Remove()
     {
         if (_isSnapshot)

@@ -2,6 +2,15 @@
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer.
 
+## 5.0.1 - 2026-07-08
+
+### Added
+
+- `PackageReleaseNotes` in `Eggnine.Common.csproj`, so the 5.0.0 release notes show up on the
+  NuGet package page itself. `v5.0.0` was already tagged (immutable per this repo's own tag
+  policy, see below) by the time this was written, so it lands as its own patch release —
+  packaging metadata only, no code changes.
+
 ## 5.0.0 - 2026-07-08
 
 ### Fixed

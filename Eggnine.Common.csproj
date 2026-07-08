@@ -7,7 +7,10 @@
     <PackageProjectUrl>https://github.com/rf-eggnine/Eggnine.Common</PackageProjectUrl>
     <RepositoryUrl>https://github.com/rf-eggnine/Eggnine.Common</RepositoryUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <Version>5.0.0</Version>
+    <Version>5.0.1</Version>
+    <PackageReleaseNotes>5.0.0: MassDeq&lt;T&gt; enumeration order didn't match dequeue order -- Enqueue prepended at the head, and enumeration also started from the head, so foreach/.ToList()/.First()/Contains/ICollection&lt;T&gt;.Remove/CopyTo all yielded items newest-first, backwards from what TryDequeue actually removed first (violating System.Collections.Generic.Queue&lt;T&gt; convention). Rather than just flip the direction, replaced the implicit convention with an explicit head/tail API: EnqueueHead/EnqueueTail, TryDequeueHead/DequeueHead/TryDequeueTail/DequeueTail, TryPeekHead/PeekHead/TryPeekTail/PeekTail -- all O(1), every member names the physical end it acts on. IsReversed/Reverse() are gone; GetReversedEnumerator() replaces their one remaining job (enumeration direction) with no mutable per-instance state. Also fixed: TryMassDequeue's returned segment and CopyTo's internal composition both had order bugs entangled with the one above, plus an exception-message typo. See CHANGELOG.md for the full write-up.
+
+5.0.1: Packaging metadata only (this release-notes field) -- no code changes.</PackageReleaseNotes>
   </PropertyGroup>
 
   <PropertyGroup>

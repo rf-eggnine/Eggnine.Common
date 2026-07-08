@@ -165,6 +165,28 @@ public sealed class MassDeq<T> : IMassDeq<T>
         }
     }
 
+    /// <summary>Finds the first item matching <paramref name="predicate"/> and inserts
+    /// <paramref name="item"/> immediately after it, atomically — the scan and the splice both
+    /// happen under one lock hold, so a concurrent TryMassDequeue/TryRemove/etc. can't detach the
+    /// found node between "found it" and "spliced next to it" (which would silently orphan the
+    /// insert onto a detached segment the live deque no longer points to).</summary>
+    public bool InsertAfter(T item, Predicate<T> predicate)
+    {
+        lock (_gate)
+        {
+            for (MassDeqEnumerator<T> enumerator = GetLiveEnumerator();
+                enumerator.MoveNext();)
+            {
+                if (predicate(enumerator.Current))
+                {
+                    enumerator.InsertAfter(item);
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
+
     /// <summary>Faithful copy — same head-to-tail order as this deque.</summary>
     public MassDeq<T> Clone(Predicate<T>? wherePredicate = null)
     {

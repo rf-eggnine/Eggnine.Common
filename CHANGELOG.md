@@ -2,6 +2,31 @@
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer.
 
+## 5.1.0 - 2026-07-08
+
+### Added
+
+- `IMassDeq.InsertAfter`, `MassDeq.InsertAfter`, and `MassDeqEnumerator.InsertAfter` to complement
+  `InsertBefore` — same atomic scan-and-splice under one lock, mirrored geometry (physical
+  splice point is on the other side of the matched node), same behavior in reversed-enumerator
+  mode, same snapshot-enumerator guard. New test coverage in `Eggnine.Common.Tests` mirrors
+  `InsertBefore`'s existing tests (head/tail/middle placement, not-found returns false, throws
+  on a snapshot enumerator).
+
+### Fixed
+
+- **CI secret scanning was broken, not actually removed.** The Gitleaks GitHub Action
+  (`.github/workflows/secret-scan.yml`) had drifted to a very old, now-broken action version
+  whose step passed `args: version` — meaning it only ever printed the Gitleaks version string
+  and never actually scanned anything. Rather than repin the third-party `gitleaks-action`
+  wrapper (whose v2+ requires a paid license key for organization-owned repos — a real
+  consideration, not a Gitleaks-the-tool licensing issue: Gitleaks itself is Apache-2.0 and
+  imposes no obligations on a scanned repo regardless of that repo's own license), the workflow
+  now installs the `gitleaks` CLI directly from its GitHub releases and runs a real
+  `gitleaks detect` scan — no third-party action, no license gate either way. `.githooks/
+  pre-commit` and `.gitleaks.baseline.json` restored unchanged. Verified end-to-end locally:
+  installs cleanly, scans this repo's full history, reports no leaks.
+
 ## 5.0.1 - 2026-07-08
 
 ### Added

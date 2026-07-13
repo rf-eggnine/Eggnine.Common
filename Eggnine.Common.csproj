@@ -7,9 +7,14 @@
     <PackageProjectUrl>https://github.com/rf-eggnine/Eggnine.Common</PackageProjectUrl>
     <RepositoryUrl>https://github.com/rf-eggnine/Eggnine.Common</RepositoryUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <Version>5.1.0</Version>
+    <Version>6.0.0</Version>
     <PackageReleaseNotes>
-      5.1.0: Added InsertAfter, matching InsertBefore for IMassDeq and MassDeqEnumerator
+      6.0.0 (breaking): MassDeq/IMassDeq gain Freeze()/IsReadOnly and an asFrozen clone parameter;
+      frozen instances skip locking on reads. Removed AsReadOnly() and ReadOnlyView&lt;T&gt; -
+      IMassDeq&lt;T&gt; already implements IReadOnlyCollection&lt;T&gt; directly, and AsReadOnly's
+      "live view" naming conflicted with BCL convention. IMassDeq&lt;T&gt;.Clone/CloneReverse
+      signatures changed (new asFrozen parameter), which breaks any external implementer of the
+      interface.
     </PackageReleaseNotes>
   </PropertyGroup>
 

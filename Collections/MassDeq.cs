@@ -42,14 +42,19 @@ public sealed class MassDeq<T> : IMassDeq<T>
     internal readonly object _gate = new object();
     internal MassDeqNode<T>? _head;
     internal MassDeqNode<T>? _tail;
+    internal bool _isFrozen;
     internal int _count;
     public int Count => Volatile.Read(ref _count);
 
-    public bool IsReadOnly => false;
+    public bool IsReadOnly => _isFrozen;
 
     /// <summary>Insert at the head (front). O(1).</summary>
     public void EnqueueHead(T item)
     {
+        if(_isFrozen)
+        {
+            throw new InvalidOperationException("MassDeq is frozen");
+        }
         MassDeqNode<T> node = new(item);
         lock (_gate)
         {
@@ -71,6 +76,10 @@ public sealed class MassDeq<T> : IMassDeq<T>
     /// <summary>Insert at the tail (back). O(1).</summary>
     public void EnqueueTail(T item)
     {
+        if(_isFrozen)
+        {
+            throw new InvalidOperationException("MassDeq is frozen");
+        }
         MassDeqNode<T> node = new(item);
         lock (_gate)
         {
@@ -97,6 +106,10 @@ public sealed class MassDeq<T> : IMassDeq<T>
     /// </summary>
     public bool TryMassDequeue(Predicate<T> predicate, out MassDeq<T> segment)
     {
+        if(_isFrozen)
+        {
+            throw new InvalidOperationException("MassDeq is frozen");
+        }
         MassDeqNode<T>? current;
         segment = new();
         lock (_gate)
@@ -150,6 +163,10 @@ public sealed class MassDeq<T> : IMassDeq<T>
     /// insert onto a detached segment the live deque no longer points to).</summary>
     public bool InsertBefore(T item, Predicate<T> predicate)
     {
+        if(_isFrozen)
+        {
+            throw new InvalidOperationException("MassDeq is frozen");
+        }
         lock (_gate)
         {
             for (MassDeqEnumerator<T> enumerator = GetLiveEnumerator();
@@ -172,6 +189,10 @@ public sealed class MassDeq<T> : IMassDeq<T>
     /// insert onto a detached segment the live deque no longer points to).</summary>
     public bool InsertAfter(T item, Predicate<T> predicate)
     {
+        if(_isFrozen)
+        {
+            throw new InvalidOperationException("MassDeq is frozen");
+        }
         lock (_gate)
         {
             for (MassDeqEnumerator<T> enumerator = GetLiveEnumerator();
@@ -187,12 +208,25 @@ public sealed class MassDeq<T> : IMassDeq<T>
         }
     }
 
-    /// <summary>Faithful copy — same head-to-tail order as this deque.</summary>
-    public MassDeq<T> Clone(Predicate<T>? wherePredicate = null)
+    /// <summary>
+    /// Faithful copy, same head-to-tail order as this deque.
+    /// </summary>
+    /// <param name="wherePredicate"></param>
+    /// <param name="asFrozen"></param>
+    /// <returns></returns>
+    public MassDeq<T> Clone(Predicate<T>? wherePredicate = null, bool asFrozen = false)
     {
-        MassDeq<T> toReturn = new();
+        if (_isFrozen)
+        {
+            return Clone(asFrozen);
+        }
         lock (_gate)
         {
+            return Clone(asFrozen);
+        }
+        MassDeq<T> Clone(bool freeze)
+        {
+            MassDeq<T> toReturn = new();
             for (MassDeqEnumerator<T> enumerator = GetLiveEnumerator(); enumerator.MoveNext();)
             {
                 T value = enumerator.Current;
@@ -201,18 +235,36 @@ public sealed class MassDeq<T> : IMassDeq<T>
                     toReturn.EnqueueTail(value);
                 }
             }
+            if (freeze)
+            {
+                toReturn.Freeze();
+            }
+            return toReturn;
         }
-        return toReturn;
     }
 
-    /// <summary>Same as <see cref="Clone"/> but the copy comes out in reverse (tail-to-head)
+    /// <summary>
+    /// Same as <see cref="Clone"/> but the copy comes out in reverse (tail-to-head)
     /// order — walks this deque head-to-tail once, prepending each match, so the last item
-    /// visited (this deque's own tail) ends up at the clone's head.</summary>
-    public MassDeq<T> CloneReverse(Predicate<T>? wherePredicate = null)
+    /// visited (this deque's own tail) ends up at the clone's head.
+    /// </summary>
+    /// <param name="wherePredicate"></param>
+    /// <param name="asFrozen"></param>
+    /// <returns></returns>
+    public MassDeq<T> CloneReverse(Predicate<T>? wherePredicate = null, bool asFrozen = false)
     {
-        MassDeq<T> toReturn = new();
+
+        if (_isFrozen)
+        {
+            return Clone(asFrozen);
+        }
         lock (_gate)
         {
+            return Clone(asFrozen);
+        }
+        MassDeq<T> Clone(bool freeze)
+        {
+            MassDeq<T> toReturn = new();
             for (MassDeqEnumerator<T> enumerator = GetLiveEnumerator(); enumerator.MoveNext();)
             {
                 T value = enumerator.Current;
@@ -221,13 +273,20 @@ public sealed class MassDeq<T> : IMassDeq<T>
                     toReturn.EnqueueHead(value);
                 }
             }
+            if (freeze)
+            {
+                toReturn.Freeze();
+            }
+            return toReturn;
         }
-        return toReturn;
     }
 
-    public IReadOnlyCollection<T> AsReadOnly()
+    /// <summary>
+    /// Freezes the MassDeq in place
+    /// </summary>
+    internal void Freeze()
     {
-        return new ReadOnlyView<T>(this);
+        _isFrozen = true;
     }
 
     /// <summary>
@@ -236,6 +295,10 @@ public sealed class MassDeq<T> : IMassDeq<T>
     /// </summary>
     public bool TryDequeueHead(out T item)
     {
+        if(_isFrozen)
+        {
+            throw new InvalidOperationException("MassDeq is frozen");
+        }
         lock (_gate)
         {
             if (_tail is null || _head is null)
@@ -270,6 +333,10 @@ public sealed class MassDeq<T> : IMassDeq<T>
     /// </summary>
     public bool TryDequeueTail(out T item)
     {
+        if(_isFrozen)
+        {
+            throw new InvalidOperationException("MassDeq is frozen");
+        }
         lock (_gate)
         {
             if (_tail is null || _head is null)
@@ -310,7 +377,15 @@ public sealed class MassDeq<T> : IMassDeq<T>
     /// </summary>
     public MassDeqEnumerator<T> GetEnumerator()
     {
+        if (_isFrozen)
+        {
+            return Get();
+        }
         lock (_gate)
+        {
+            return Get();
+        }
+        MassDeqEnumerator<T> Get()
         {
             MassDeqNode<T>? snapshotHead = null;
             MassDeqNode<T>? snapshotTail = null;
@@ -342,7 +417,15 @@ public sealed class MassDeq<T> : IMassDeq<T>
     /// </summary>
     public MassDeqEnumerator<T> GetReversedEnumerator()
     {
+        if (_isFrozen)
+        {
+            return Get();
+        }
         lock (_gate)
+        {
+            return Get();
+        }
+        MassDeqEnumerator<T> Get()
         {
             MassDeqNode<T>? snapshotHead = null;
             MassDeqNode<T>? snapshotTail = null;
@@ -389,11 +472,19 @@ public sealed class MassDeq<T> : IMassDeq<T>
 
     public void Add(T item)
     {
+        if(_isFrozen)
+        {
+            throw new InvalidOperationException("MassDeq is frozen");
+        }
         EnqueueTail(item);
     }
 
     public void Clear()
     {
+        if(_isFrozen)
+        {
+            throw new InvalidOperationException("MassDeq is frozen");
+        }
         lock (_gate)
         {
             _head = null;
@@ -405,7 +496,15 @@ public sealed class MassDeq<T> : IMassDeq<T>
 
     public bool Contains(T item)
     {
+        if (_isFrozen)
+        {
+            return Contains();
+        }
         lock (_gate)
+        {
+            return Contains();
+        }
+        bool Contains()
         {
             for (MassDeqEnumerator<T> enumerator = GetLiveEnumerator(); enumerator.MoveNext();)
             {
@@ -459,6 +558,10 @@ public sealed class MassDeq<T> : IMassDeq<T>
     /// matched.</summary>
     public bool TryRemove(T item, out T? removed)
     {
+        if(_isFrozen)
+        {
+            throw new InvalidOperationException("MassDeq is frozen");
+        }
         lock (_gate)
         {
             for (MassDeqEnumerator<T> enumerator = GetLiveEnumerator();
@@ -479,15 +582,23 @@ public sealed class MassDeq<T> : IMassDeq<T>
     /// return, without removing it. Returns false if the deque is empty.</summary>
     public bool TryPeekHead(out T item)
     {
+        if (_isFrozen)
+        {
+            return TryPeek(out item);
+        }
         lock (_gate)
+        {
+            return TryPeek(out item);
+        }
+        bool TryPeek(out T itm)
         {
             MassDeqNode<T>? node = _head;
             if (node is null)
             {
-                item = default!;
+                itm = default!;
                 return false;
             }
-            item = node.Value;
+            itm = node.Value;
             return true;
         }
     }
@@ -496,15 +607,23 @@ public sealed class MassDeq<T> : IMassDeq<T>
     /// return, without removing it. Returns false if the deque is empty.</summary>
     public bool TryPeekTail(out T item)
     {
+        if (_isFrozen)
+        {
+            return TryPeek(out item);
+        }
         lock (_gate)
+        {
+            return TryPeek(out item);
+        }
+        bool TryPeek(out T itm)
         {
             MassDeqNode<T>? node = _tail;
             if (node is null)
             {
-                item = default!;
+                itm = default!;
                 return false;
             }
-            item = node.Value;
+            itm = node.Value;
             return true;
         }
     }
@@ -535,6 +654,10 @@ public sealed class MassDeq<T> : IMassDeq<T>
     /// instead of returning false when the deque is empty — matches <see cref="Queue{T}.Dequeue"/>.</summary>
     public T DequeueHead()
     {
+        if(_isFrozen)
+        {
+            throw new InvalidOperationException("MassDeq is frozen");
+        }
         if (!TryDequeueHead(out T item))
         {
             throw new InvalidOperationException("MassDeq is empty.");
@@ -546,6 +669,10 @@ public sealed class MassDeq<T> : IMassDeq<T>
     /// instead of returning false when the deque is empty.</summary>
     public T DequeueTail()
     {
+        if(_isFrozen)
+        {
+            throw new InvalidOperationException("MassDeq is frozen");
+        }
         if (!TryDequeueTail(out T item))
         {
             throw new InvalidOperationException("MassDeq is empty.");
@@ -555,12 +682,16 @@ public sealed class MassDeq<T> : IMassDeq<T>
 
     bool IMassDeq<T>.TryMassDequeue(Predicate<T> predicate, out IMassDeq<T> segment)
     {
+        if(_isFrozen)
+        {
+            throw new InvalidOperationException("MassDeq is frozen");
+        }
         bool result = TryMassDequeue(predicate, out MassDeq<T> concreteSegment);
         segment = concreteSegment;
         return result;
     }
 
-    IMassDeq<T> IMassDeq<T>.Clone(Predicate<T>? wherePredicate) => Clone(wherePredicate);
+    IMassDeq<T> IMassDeq<T>.Clone(Predicate<T>? wherePredicate, bool asFrozen) => Clone(wherePredicate, asFrozen);
 
-    IMassDeq<T> IMassDeq<T>.CloneReverse(Predicate<T>? wherePredicate) => CloneReverse(wherePredicate);
+    IMassDeq<T> IMassDeq<T>.CloneReverse(Predicate<T>? wherePredicate, bool asFrozen) => CloneReverse(wherePredicate, asFrozen);
 }

@@ -2,6 +2,36 @@
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer.
 
+## 6.0.0 - 2026-07-13
+
+### Added
+
+- `MassDeq<T>.Freeze()` (internal, reached via `Clone(asFrozen: true)`/`CloneReverse(asFrozen: true)`)
+  and the existing `IsReadOnly` property now report a genuinely frozen instance: every mutating
+  member (`EnqueueHead`/`EnqueueTail`/`TryDequeueHead`/`TryDequeueTail`/`TryRemove`/`InsertBefore`/
+  `InsertAfter`/`Add`/`Clear`) throws `InvalidOperationException` on a frozen deque, and the
+  read paths (`Contains`, `Clone`, `CloneReverse`, `TryPeekHead`/`TryPeekTail`,
+  `GetEnumerator`/`GetReversedEnumerator`) skip the `_gate` lock entirely once frozen, since a
+  frozen instance can never be mutated again. `Clone`/`CloneReverse` gained an `asFrozen` parameter
+  (default `false`) to produce a frozen copy directly. Freezing is structural only — it freezes
+  which nodes exist and their order, not each node's own stored value, so a frozen clone of a
+  collection of mutable reference-typed elements can still observe those elements' own fields
+  changing underneath it.
+
+### Removed
+
+- `AsReadOnly()` (both `MassDeq<T>` and `IMassDeq<T>`) and the now-unused `ReadOnlyView<T>` wrapper
+  it returned. `AsReadOnly()`'s name implied a BCL-style *live* read-only view, but it only ever
+  returned a point-in-time clone — a real, unfixable naming collision now that clones can also be
+  frozen. `IMassDeq<T>` already implements `IReadOnlyCollection<T>` directly, so callers that only
+  need read access can hold an `IMassDeq<T>` reference instead of calling `AsReadOnly()`.
+
+### Changed (breaking)
+
+- `IMassDeq<T>.Clone`/`CloneReverse` signatures gained the `asFrozen` parameter — source-compatible
+  for existing callers (default `false`), but breaks any external implementer of `IMassDeq<T>` that
+  hasn't been updated to match.
+
 ## 5.1.0 - 2026-07-08
 
 ### Added
